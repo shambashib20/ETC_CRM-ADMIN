@@ -5,8 +5,6 @@ import ProcessorIcon from "@/components/icons/proccesor";
 import BoomIcon from "@/components/icons/boom";
 import mockDataJson from "@/mock.json";
 import type { MockData } from "@/types/dashboard";
-import { Button, buttonVariants } from "@/components/ui/button";
-import Link from "next/link";
 
 const mockData = mockDataJson as MockData;
 
