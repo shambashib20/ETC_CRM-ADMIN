@@ -3,20 +3,22 @@ import Link from "next/link";
 import BracketsIcon from "@/components/icons/brackets";
 import DashboardPageLayout from "@/components/dashboard/layout";
 
+// Server Page props: searchParams is a Promise in Next.js 15/16
+type PageSearchParams = { page?: string; limit?: string };
+
 type Props = {
-  searchParams?: { page?: string; limit?: string };
+  searchParams: Promise<PageSearchParams>;
 };
 
 export type Property = {
   _id: string;
   name: string;
-  description: string;
-  usage_limits: number;
-  usage_count: number;
-  status: string;
-  createdAt: string;
-  updatedAt: string;
-  // add what you actually render; keep the rest optional to avoid over-coupling
+  description?: string;
+  usage_limits?: number;
+  usage_count?: number;
+  status?: string;
+  createdAt?: string;
+  updatedAt?: string;
 };
 
 type Pagination = {
@@ -37,23 +39,19 @@ type ApiSuccess = {
   };
 };
 
-const API_URL = "https://crm-server-tsnj.onrender.com/api/property/all";
+const API_URL = "http://localhost:8850/api/property/all";
 
 export async function fetchProperties(page = 1, limit = 10) {
-  // Revalidate every 60s. If you want absolutely fresh, use cache: "no-store"
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 15000);
+  const timeout = setTimeout(() => controller.abort(), 15_000);
 
   const res = await fetch(API_URL, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    // Important: backend expects pagination in body, not in query
-    body: JSON.stringify({ page, limit }),
-    // Choose one strategy:
-    // cache: "no-store",
+    body: JSON.stringify({ page, limit }), // backend expects body
     next: { revalidate: 60, tags: ["properties"] },
     signal: controller.signal,
-  }).catch((e) => {
+  }).catch((e: any) => {
     throw new Error(`Network error: ${e?.message || "unknown"}`);
   });
 
@@ -67,22 +65,25 @@ export async function fetchProperties(page = 1, limit = 10) {
   }
 
   const json = (await res.json()) as ApiSuccess;
-
   if (json.status !== "SUCCESS" || !json.data) {
     throw new Error("Unexpected API shape.");
   }
-
   return json.data;
 }
 
 export default async function WorkspacePage({ searchParams }: Props) {
-  const page = Number(searchParams?.page || 1);
-  const limit = Number(searchParams?.limit || 10);
+  // IMPORTANT: await the promise in Next 15/16
+  const sp = await searchParams;
 
-  // Guardrails
-  const safePage = Number.isFinite(page) && page > 0 ? page : 1;
+  // Parse and clamp
+  const pageNum = Number(sp.page ?? 1);
+  const limitNum = Number(sp.limit ?? 10);
+
+  const safePage = Number.isFinite(pageNum) && pageNum > 0 ? pageNum : 1;
   const safeLimit =
-    Number.isFinite(limit) && limit > 0 && limit <= 100 ? limit : 10;
+    Number.isFinite(limitNum) && limitNum > 0 && limitNum <= 100
+      ? limitNum
+      : 10;
 
   const { properties, pagination } = await fetchProperties(safePage, safeLimit);
 
@@ -94,15 +95,12 @@ export default async function WorkspacePage({ searchParams }: Props) {
         icon: BracketsIcon,
       }}
     >
-      {/* Stats / header grid if you want */}
       <div className="grid grid-cols-1 gap-6 mb-1">
-        {/* Replace with your cards later */}
         <div className="border-b pb-5 ">
           <h3 className="text-3xl">Properties Listing</h3>
         </div>
       </div>
 
-      {/* List */}
       <section className="space-y-3">
         {properties.length === 0 ? (
           <div className="text-sm text-muted-foreground">
@@ -119,11 +117,14 @@ export default async function WorkspacePage({ searchParams }: Props) {
                       {p.description || "No description"}
                     </p>
                     <div className="mt-2 text-xs text-muted-foreground">
-                      Usage {p.usage_count}/{p.usage_limits} • Status {p.status}
+                      Usage {p.usage_count ?? 0}/{p.usage_limits ?? 0} • Status{" "}
+                      {p.status ?? "N/A"}
                     </div>
                   </div>
                   <div className="text-xs text-muted-foreground shrink-0">
-                    {new Date(p.createdAt).toLocaleDateString()}
+                    {p.createdAt
+                      ? new Date(p.createdAt).toLocaleDateString()
+                      : "—"}
                   </div>
                 </div>
               </li>
@@ -132,7 +133,6 @@ export default async function WorkspacePage({ searchParams }: Props) {
         )}
       </section>
 
-      {/* Pagination */}
       <Pagination
         currentPage={pagination.currentPage}
         totalPages={pagination.totalPages}
@@ -142,7 +142,7 @@ export default async function WorkspacePage({ searchParams }: Props) {
   );
 }
 
-// Server component: no "use client"
+// Server component pagination (no "use client")
 function Pagination({
   currentPage,
   totalPages,
@@ -155,6 +155,14 @@ function Pagination({
   const prevPage = Math.max(1, currentPage - 1);
   const nextPage = Math.min(totalPages, currentPage + 1);
 
+  // helper to build href while preserving other query params if needed later
+  const hrefWith = (page: number) => {
+    const usp = new URLSearchParams();
+    usp.set("page", String(page));
+    usp.set("limit", String(limit));
+    return `?${usp.toString()}`;
+  };
+
   const PageLink = ({
     page,
     disabled,
@@ -166,7 +174,7 @@ function Pagination({
   }) => (
     <Link
       prefetch={false}
-      href={`?page=${page}&limit=${limit}`}
+      href={hrefWith(page)}
       aria-disabled={disabled}
       className={[
         "px-3 py-2 rounded-xl border",
@@ -179,7 +187,6 @@ function Pagination({
     </Link>
   );
 
-  // Optional: page number window
   const windowSize = 5;
   const start = Math.max(1, currentPage - Math.floor(windowSize / 2));
   const end = Math.min(totalPages, start + windowSize - 1);
@@ -188,12 +195,11 @@ function Pagination({
   return (
     <nav className="mt-6 flex items-center gap-2">
       <PageLink page={prevPage} disabled={currentPage === 1} label="Prev" />
-
       {pages.map((p) => (
         <Link
           prefetch={false}
           key={p}
-          href={`?page=${p}&limit=${limit}`}
+          href={hrefWith(p)}
           className={[
             "px-3 py-2 rounded-xl border",
             p === currentPage
@@ -205,7 +211,6 @@ function Pagination({
           {p}
         </Link>
       ))}
-
       <PageLink
         page={nextPage}
         disabled={currentPage === totalPages}

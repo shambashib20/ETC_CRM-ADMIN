@@ -9,6 +9,7 @@ import ProcessorIcon from "@/components/icons/proccesor";
 import BoomIcon from "@/components/icons/boom";
 import mockDataJson from "@/mock.json";
 import type { MockData } from "@/types/dashboard";
+import SecurityStatusContainer from "@/components/dashboard/SecurityContainer";
 
 const mockData = mockDataJson as MockData;
 
@@ -29,7 +30,7 @@ export default function DashboardOverview() {
       }}
     >
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-6">
-        {mockData.dashboardStats.map((stat, index) => (
+        {/* {mockData.dashboardStats.map((stat, index) => (
           <DashboardStat
             key={index}
             label={stat.label}
@@ -40,15 +41,15 @@ export default function DashboardOverview() {
             intent={stat.intent}
             direction={stat.direction}
           />
-        ))}
+        ))} */}
       </div>
 
       <div className="mb-6">{/* <DashboardChart /> */}</div>
 
       {/* Main 2-column grid section */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-        <RebelsRanking rebels={mockData.rebelsRanking} />
-        <SecurityStatus statuses={mockData.securityStatus} />
+      <div className="mb-6">
+        {/* <RebelsRanking rebels={mockData.rebelsRanking} /> */}
+        <SecurityStatusContainer />
       </div>
     </DashboardPageLayout>
   );

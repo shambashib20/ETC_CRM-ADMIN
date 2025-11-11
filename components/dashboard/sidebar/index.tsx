@@ -34,9 +34,27 @@ import { Bullet } from "@/components/ui/bullet";
 import LockIcon from "@/components/icons/lock";
 import Image from "next/image";
 import { useIsV0 } from "@/lib/v0-context";
+import { apiClient } from "@/lib/apiClient";
 
 // This is sample data for the sidebar
-const data = {
+type NavItem = {
+  title: string;
+  url: string;
+  icon: React.ComponentType<React.SVGProps<SVGSVGElement>>;
+  isActive: boolean;
+  locked?: boolean;
+};
+
+type NavGroup = {
+  title: string;
+  items: NavItem[];
+};
+
+const data: {
+  navMain: NavGroup[];
+  desktop: { title: string; status: string };
+  user: { name: string; email: string; avatar: string };
+} = {
   navMain: [
     {
       title: "Tools",
@@ -60,24 +78,30 @@ const data = {
           isActive: false,
         },
         {
-          title: "Security",
-          url: "/security",
-          icon: CuteRobotIcon,
+          title: "Addons",
+          url: "/addons",
+          icon: ProcessorIcon,
           isActive: false,
         },
-        {
-          title: "Communication",
-          url: "/communication",
-          icon: EmailIcon,
-          isActive: false,
-        },
-        {
-          title: "Admin Settings",
-          url: "/admin",
-          icon: GearIcon,
-          isActive: false,
-          locked: true,
-        },
+        // {
+        //   title: "Security",
+        //   url: "/security",
+        //   icon: CuteRobotIcon,
+        //   isActive: false,
+        // },
+        // {
+        //   title: "Communication",
+        //   url: "/communication",
+        //   icon: EmailIcon,
+        //   isActive: false,
+        // },
+        // {
+        //   title: "Admin Settings",
+        //   url: "/admin",
+        //   icon: GearIcon,
+        //   isActive: false,
+        //   locked: true,
+        // },
       ],
     },
   ],
@@ -97,6 +121,22 @@ export function DashboardSidebar({
   ...props
 }: React.ComponentProps<typeof Sidebar>) {
   const isV0 = useIsV0();
+
+  async function userlogout() {
+    try {
+      // Call backend to clear the HttpOnly refresh cookie
+      await apiClient.get("/auth/logout");
+
+      // Wipe client-side junk
+      localStorage.clear();
+      sessionStorage.clear();
+
+      // Redirect to login
+      window.location.href = "/login";
+    } catch (err: any) {
+      console.error("Logout failed:", err.message);
+    }
+  }
 
   return (
     <Sidebar {...props} className={cn("py-sides", className)}>
@@ -210,6 +250,13 @@ export function DashboardSidebar({
                       <button className="flex items-center px-4 py-2 text-sm hover:bg-accent">
                         <GearIcon className="mr-2 h-4 w-4" />
                         Settings
+                      </button>
+                      <button
+                        className="flex items-center px-4 py-2 text-sm hover:bg-accent"
+                        onClick={() => userlogout()}
+                      >
+                        <GearIcon className="mr-2 h-4 w-4" />
+                        Log out
                       </button>
                     </div>
                   </PopoverContent>

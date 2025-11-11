@@ -43,7 +43,7 @@ function SecurityStatusItem({
       </div>
       <div className="py-1 px-2.5">
         <div className="text-2xl font-bold mb-1">{value}</div>
-        <div className="text-xs opacity-50">{status}</div>
+        <div className="text-xs opacity-50 font-bold">{status}</div>
       </div>
     </div>
   );
@@ -61,7 +61,7 @@ export default function SecurityStatus({ statuses }: SecurityStatusProps) {
       addon={<Badge variant="outline-success">ONLINE</Badge>}
     >
       <div className="flex flex-col">
-        <div className="max-md:order-1 grid grid-cols:3 md:grid-cols-1 gap-4 py-2 px-1 md:max-w-max">
+        <div className="py-2 px-1 w-[200px] space-y-4">
           {statuses.map((item, index) => (
             <SecurityStatusItem
               key={index}
