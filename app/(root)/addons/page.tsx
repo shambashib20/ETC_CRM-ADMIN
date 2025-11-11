@@ -1,6 +1,7 @@
+// app/addons/page.tsx
 "use client";
 
-import { useEffect, useMemo, useState, useCallback } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
 import { apiClient } from "@/lib/apiClient";
@@ -35,6 +36,14 @@ type ApiSuccess = {
 };
 
 export default function AddonsPage() {
+  return (
+    <Suspense fallback={<GridSkeleton />}>
+      <AddonsPageInner />
+    </Suspense>
+  );
+}
+
+function AddonsPageInner() {
   const sp = useSearchParams();
   const router = useRouter();
 
@@ -44,7 +53,7 @@ export default function AddonsPage() {
   }, [sp]);
 
   const limit = useMemo(() => {
-    const n = Number(sp.get("limit") ?? 12); // Changed to 12 for better grid layout
+    const n = Number(sp.get("limit") ?? 12);
     return Number.isFinite(n) && n > 0 ? n : 12;
   }, [sp]);
 
@@ -57,6 +66,8 @@ export default function AddonsPage() {
     setLoading(true);
     setErr(null);
     try {
+      // IMPORTANT: call relative to your apiClient BASE.
+      // If BASE is http://localhost:8850/api then use "/addons/fetch" (NOT "/api/addons/fetch")
       const res = (await apiClient.get(
         `/api/addons/fetch?page=${page}&limit=${limit}`
       )) as ApiSuccess;
@@ -81,9 +92,15 @@ export default function AddonsPage() {
     router.replace(`?${params.toString()}`);
   };
 
+  const goToPage = (p: number) => {
+    const params = new URLSearchParams(sp.toString());
+    params.set("page", String(p));
+    router.replace(`?${params.toString()}`);
+  };
+
   return (
     <div className="min-h-screen bg-background p-6 space-y-6">
-      {/* Header Section */}
+      {/* Header */}
       <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
         <div className="space-y-2">
           <h1 className="font-display text-3xl md:text-4xl text-foreground">
@@ -126,10 +143,10 @@ export default function AddonsPage() {
         </div>
       </div>
 
-      {/* Loading State */}
+      {/* Loading */}
       {loading && <GridSkeleton />}
 
-      {/* Error State */}
+      {/* Error */}
       {err && !loading && (
         <div className="rounded-lg border border-destructive bg-destructive/10 p-6 text-destructive font-mono text-sm">
           <div className="flex items-center gap-3 mb-3">
@@ -148,7 +165,7 @@ export default function AddonsPage() {
         </div>
       )}
 
-      {/* Empty State */}
+      {/* Empty */}
       {!loading && !err && addons.length === 0 && (
         <div className="rounded-lg border border-border bg-pop p-8 text-center">
           <div className="text-muted-foreground font-mono space-y-3">
@@ -166,7 +183,7 @@ export default function AddonsPage() {
         </div>
       )}
 
-      {/* Addons Grid */}
+      {/* Grid */}
       {!loading && !err && addons.length > 0 && (
         <>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
@@ -176,7 +193,13 @@ export default function AddonsPage() {
           </div>
 
           {pagination && pagination.totalPages > 1 && (
-            <Pagination pagination={pagination} />
+            <Pagination
+              currentPage={pagination.currentPage}
+              totalPages={pagination.totalPages}
+              limit={pagination.limit}
+              totalItems={pagination.totalItems}
+              onGoToPage={goToPage}
+            />
           )}
         </>
       )}
@@ -190,15 +213,14 @@ function AddonCard({ addon }: { addon: Addon }) {
     INACTIVE: "bg-muted text-muted-foreground",
     PENDING: "bg-warning text-warning-foreground",
     DRAFT: "bg-muted text-muted-foreground",
-  };
+  } as const;
 
   const statusColor =
-    statusColors[addon.status as keyof typeof statusColors] ||
+    statusColors[addon.status as keyof typeof statusColors] ??
     statusColors.INACTIVE;
 
   return (
     <div className="bg-card border border-border rounded-xl p-4 hover:border-ring transition-all duration-200 group">
-      {/* Card Header */}
       <div className="flex items-start justify-between gap-3 mb-3">
         <h3 className="font-mono font-semibold text-card-foreground text-lg truncate flex-1">
           {addon.title}
@@ -210,12 +232,10 @@ function AddonCard({ addon }: { addon: Addon }) {
         </span>
       </div>
 
-      {/* Description */}
       <p className="text-muted-foreground font-mono text-sm line-clamp-2 mb-4 min-h-[2.5rem]">
         {addon.description}
       </p>
 
-      {/* Value and Meta */}
       <div className="space-y-2 mb-4">
         <div className="flex items-center justify-between">
           <span className="text-xs font-mono text-muted-foreground">VALUE</span>
@@ -233,14 +253,7 @@ function AddonCard({ addon }: { addon: Addon }) {
         </div>
       </div>
 
-      {/* Actions */}
       <div className="flex items-center gap-2 pt-3 border-t border-border">
-        {/* <Link
-          href={`/addons/${addon._id}`}
-          className="flex-1 py-2 text-center bg-primary text-primary-foreground font-mono text-sm rounded-lg border border-border hover:bg-primary/90 transition-all duration-200"
-        >
-          VIEW
-        </Link> */}
         <Link
           href={
             `/addons/edit?` +
@@ -249,6 +262,7 @@ function AddonCard({ addon }: { addon: Addon }) {
               title: addon.title,
               description: addon.description,
               value: String(addon.value),
+              status: addon.status,
             }).toString()
           }
           className="flex-1 py-2 text-center bg-pop text-foreground font-mono text-sm rounded-lg border border-border hover:bg-pop/50 transition-all duration-200"
@@ -260,12 +274,19 @@ function AddonCard({ addon }: { addon: Addon }) {
   );
 }
 
-function Pagination({ pagination }: { pagination: Pagination }) {
-  const { currentPage, totalPages, limit } = pagination;
-  const router = useRouter();
-  const sp = useSearchParams();
-
-  const pageHref = (p: number) => `?page=${p}&limit=${limit}`;
+function Pagination({
+  currentPage,
+  totalPages,
+  limit,
+  totalItems,
+  onGoToPage,
+}: {
+  currentPage: number;
+  totalPages: number;
+  limit: number;
+  totalItems: number;
+  onGoToPage: (page: number) => void;
+}) {
   const prev = Math.max(1, currentPage - 1);
   const next = Math.min(totalPages, currentPage + 1);
 
@@ -275,25 +296,18 @@ function Pagination({ pagination }: { pagination: Pagination }) {
     let start = Math.max(1, currentPage - half);
     let end = Math.min(totalPages, start + windowSize - 1);
     start = Math.max(1, Math.min(start, end - windowSize + 1));
-
     return Array.from({ length: end - start + 1 }, (_, i) => start + i);
   }, [currentPage, totalPages]);
-
-  const goToPage = (page: number) => {
-    const params = new URLSearchParams(sp.toString());
-    params.set("page", String(page));
-    router.replace(`?${params.toString()}`);
-  };
 
   return (
     <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-6 border-t border-border">
       <div className="text-muted-foreground font-mono text-sm">
-        PAGE {currentPage} OF {totalPages} • {pagination.totalItems} ITEMS
+        PAGE {currentPage} OF {totalPages} • {totalItems} ITEMS
       </div>
 
       <nav className="flex items-center gap-1">
         <button
-          onClick={() => goToPage(prev)}
+          onClick={() => onGoToPage(prev)}
           disabled={currentPage === 1}
           className="px-3 py-2 border border-border rounded-lg font-mono text-sm hover:bg-pop transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
         >
@@ -303,7 +317,7 @@ function Pagination({ pagination }: { pagination: Pagination }) {
         {pages[0] > 1 && (
           <>
             <button
-              onClick={() => goToPage(1)}
+              onClick={() => onGoToPage(1)}
               className="px-3 py-2 border border-border rounded-lg font-mono text-sm hover:bg-pop transition-all duration-200"
             >
               1
@@ -317,7 +331,7 @@ function Pagination({ pagination }: { pagination: Pagination }) {
         {pages.map((p) => (
           <button
             key={p}
-            onClick={() => goToPage(p)}
+            onClick={() => onGoToPage(p)}
             className={`px-3 py-2 border rounded-lg font-mono text-sm transition-all duration-200 ${
               p === currentPage
                 ? "bg-primary text-primary-foreground border-primary"
@@ -334,7 +348,7 @@ function Pagination({ pagination }: { pagination: Pagination }) {
               <span className="px-2 text-muted-foreground">...</span>
             )}
             <button
-              onClick={() => goToPage(totalPages)}
+              onClick={() => onGoToPage(totalPages)}
               className="px-3 py-2 border border-border rounded-lg font-mono text-sm hover:bg-pop transition-all duration-200"
             >
               {totalPages}
@@ -343,7 +357,7 @@ function Pagination({ pagination }: { pagination: Pagination }) {
         )}
 
         <button
-          onClick={() => goToPage(next)}
+          onClick={() => onGoToPage(next)}
           disabled={currentPage === totalPages}
           className="px-3 py-2 border border-border rounded-lg font-mono text-sm hover:bg-pop transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
         >
